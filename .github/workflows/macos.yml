@@ -1,0 +1,54 @@
+name: macos-ci
+on:
+  push:
+    branches:
+      - osx-arm64-ci
+
+jobs:
+  test:
+    name: test
+    runs-on: [self-hosted, ARM64, macOS]
+
+    timeout-minutes: 600
+      #    strategy:
+      #      matrix:
+      #        os: [macos-latest, macos-11]
+    steps:
+      - name: disable git crlf conversion
+        run: git config --global core.autocrlf false
+
+      - name: checkout the source code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - name: collect CPU statistics
+        run: src/ci/scripts/collect-cpu-stats.sh
+
+      - name: show the current environment
+        run: src/ci/scripts/dump-environment.sh
+
+      - name: install sccache
+        run: src/ci/scripts/install-sccache.sh
+
+      - name: ensure the build happens on a partition with enough space
+        run: src/ci/scripts/symlink-build-dir.sh
+
+      - name: checkout submodules
+        run: src/ci/scripts/checkout-submodules.sh
+
+      - name: ensure line endings are correct
+        run: src/ci/scripts/verify-line-endings.sh
+
+      - name: run the build
+        run: src/ci/scripts/run-build-from-ci.sh
+        env:
+          SCRIPT: "./x.py --stage 2 test"
+          RUST_CONFIGURE_ARGS: --build=aarch64-apple-darwin --enable-profiler --set rust.jemalloc --set llvm.ninja=false --set build.print-step-timings --enable-verbose-tests
+          RUSTC_RETRY_LINKER_ON_SEGFAULT: 1
+          MACOSX_DEPLOYMENT_TARGET: 10.8
+          MACOSX_STD_DEPLOYMENT_TARGET: 10.7
+          NO_LLVM_ASSERTIONS: 1
+          NO_DEBUG_ASSERTIONS: 1
+          CC: clang
+          CXX: clang++
