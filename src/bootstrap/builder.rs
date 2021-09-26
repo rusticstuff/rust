@@ -388,7 +388,6 @@ impl<'a> Builder<'a> {
                 tool::Rls,
                 tool::RustAnalyzer,
                 tool::RustDemangler,
-                tool::Rustdoc,
                 tool::Clippy,
                 tool::CargoClippy,
                 native::Llvm,
@@ -1524,7 +1523,7 @@ impl<'a> Builder<'a> {
         // When we build Rust dylibs they're all intended for intermediate
         // usage, so make sure we pass the -Cprefer-dynamic flag instead of
         // linking all deps statically into the dylib.
-        if matches!(mode, Mode::Std | Mode::Rustc) {
+        if matches!(mode, Mode::Std) {
             rustflags.arg("-Cprefer-dynamic");
         }
 
