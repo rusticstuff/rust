@@ -626,6 +626,9 @@ impl Step for Rustc {
             "Building stage{} compiler artifacts ({} -> {})",
             compiler.stage, &compiler.host, target
         ));
+
+        cargo.rustflag("-Clinker-plugin-lto");
+        cargo.rustflag("-Clink-args=-fuse-ld=lld");
         run_cargo(
             builder,
             cargo,
