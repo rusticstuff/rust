@@ -1,0 +1,19 @@
+# Includes one of the default files in src/bootstrap/defaults
+profile = "compiler"
+changelog-seen = 2
+
+[llvm]
+download-ci-llvm = false
+ccache="ccache"
+link-shared = false
+use-linker="lld"
+
+[rust]
+lld = true
+
+[target.x86_64-unknown-linux-gnu]
+cc = "/home/hans/llvm/bin/clang"
+cxx = "/home/hans/llvm/bin/clang++"
+ar = "/home/hans/llvm/bin/llvm-ar"
+ranlib = "/home/hans/llvm/bin/llvm-ranlib"
+linker = "/home/hans/llvm/bin/clang"
