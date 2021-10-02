@@ -128,5 +128,5 @@ rustc-std-workspace-std = { path = 'library/rustc-std-workspace-std' }
 clippy_lints = { path = "src/tools/clippy/clippy_lints" }
 
 [profile.release]
-lto = "fat"
+lto = "thin"
 
