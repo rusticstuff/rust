@@ -225,7 +225,7 @@ impl Step for Llvm {
         //         cfg.define("LLVM_ENABLE_LLD", "ON");
         //     }
         // }
-        cfg.define("LLVM_ENABLE_LTO", "Full");
+        cfg.define("LLVM_ENABLE_LTO", "thin");
 
         // This setting makes the LLVM tools link to the dynamic LLVM library,
         // which saves both memory during parallel links and overall disk space
