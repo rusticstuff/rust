@@ -9,7 +9,10 @@ link-shared = false
 use-linker="lld"
 
 [rust]
-lld = true
+#lld = true
+jemalloc = true
+#codegen-units = 1
+codegen-units-std = 1
 
 [target.x86_64-unknown-linux-gnu]
 cc = "/home/hans/llvm/bin/clang"
