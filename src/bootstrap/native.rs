@@ -597,6 +597,13 @@ impl Step for Lld {
         if let Some(ref linker) = builder.config.llvm_use_linker {
             cfg.define("LLVM_USE_LINKER", linker);
         }
+        if builder.config.llvm_profile_generate {
+            cfg.define("LLVM_BUILD_INSTRUMENTED", "IR");
+            cfg.define("LLVM_BUILD_RUNTIME", "No");
+        }
+        if let Some(path) = builder.config.llvm_profile_use.as_ref() {
+            cfg.define("LLVM_PROFDATA_FILE", &path);
+        }
         configure_cmake(builder, target, &mut cfg, true);
 
         // This is an awful, awful hack. Discovered when we migrated to using
