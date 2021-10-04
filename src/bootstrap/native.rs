@@ -219,13 +219,12 @@ impl Step for Llvm {
             cfg.define("LLVM_ENABLE_ZLIB", "OFF");
         }
 
-        // if builder.config.llvm_thin_lto {
-        //     cfg.define("LLVM_ENABLE_LTO", "Thin");
-        //     if !target.contains("apple") {
-        //         cfg.define("LLVM_ENABLE_LLD", "ON");
-        //     }
-        // }
-        cfg.define("LLVM_ENABLE_LTO", "thin");
+        if builder.config.llvm_thin_lto {
+            cfg.define("LLVM_ENABLE_LTO", "Thin");
+            if !target.contains("apple") {
+                cfg.define("LLVM_ENABLE_LLD", "ON");
+            }
+        }
 
         // This setting makes the LLVM tools link to the dynamic LLVM library,
         // which saves both memory during parallel links and overall disk space
