@@ -546,7 +546,7 @@ impl Step for Rustdoc {
             features.push("jemalloc".to_string());
         }
 
-        let cargo = prepare_tool_cargo(
+        let mut cargo = prepare_tool_cargo(
             builder,
             build_compiler,
             Mode::ToolRustc,
@@ -556,6 +556,9 @@ impl Step for Rustdoc {
             SourceType::InTree,
             features.as_slice(),
         );
+
+        cargo.rustflag("-Clinker-plugin-lto");
+        cargo.rustflag("-Clink-args=-fuse-ld=lld");
 
         builder.info(&format!(
             "Building rustdoc for stage{} ({})",
