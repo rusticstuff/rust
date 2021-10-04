@@ -113,8 +113,7 @@ ENV RUST_CONFIGURE_ARGS \
       --set rust.jemalloc \
       --set llvm.use-linker=lld \
       --set llvm.link-shared=false
-#ENV SCRIPT ../src/ci/pgo.sh python3 ../x.py dist
-ENV SCRIPT python3 ../x.py dist \
+ENV SCRIPT ../src/ci/pgo.sh python3 ../x.py dist \
     --host $HOSTS --target $HOSTS \
     --include-default-paths \
     src/tools/build-manifest
