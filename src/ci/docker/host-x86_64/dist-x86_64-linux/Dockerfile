@@ -111,7 +111,6 @@ ENV RUST_CONFIGURE_ARGS \
       --set llvm.thin-lto=true \
       --set llvm.ninja=false \
       --set rust.jemalloc \
-      --set llvm.use-linker=lld \
       --set llvm.link-shared=false
 ENV SCRIPT ../src/ci/pgo.sh python3 ../x.py dist \
     --host $HOSTS --target $HOSTS \
