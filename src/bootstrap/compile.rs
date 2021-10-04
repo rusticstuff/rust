@@ -628,6 +628,9 @@ impl Step for Rustc {
         ));
 
         cargo.rustflag("-Clinker-plugin-lto");
+        if builder.config.llvm_profile_generate {
+            cargo.rustflag("-Clink-args=-fprofile-instr-generate");
+        }
         cargo.rustflag("-Clink-args=-fuse-ld=lld");
         run_cargo(
             builder,
