@@ -519,6 +519,7 @@ fn configure_cmake(
     let mut cxxflags = builder.cflags(target, GitRepo::Llvm).join(" ");
     if builder.config.llvm_static_stdcpp && !target.contains("msvc") && !target.contains("netbsd") {
         cfg.define("CMAKE_SHARED_LINKER_FLAGS", "-static-libstdc++");
+        cfg.define("CMAKE_EXE_LINKER_FLAGS", "-static-libstdc++");
     }
     if let Some(ref s) = builder.config.llvm_cxxflags {
         cxxflags.push_str(&format!(" {}", s));
