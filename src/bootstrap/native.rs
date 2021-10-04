@@ -509,6 +509,9 @@ fn configure_cmake(
             cflags.push_str(" -miphoneos-version-min=10.0");
         }
     }
+    if builder.config.llvm_profile_generate {
+        cflags.push_str(" -Xclang -mllvm -Xclang -vp-counters-per-site=4")
+    }
     if builder.config.llvm_clang_cl.is_some() {
         cflags.push_str(&format!(" --target={}", target))
     }
@@ -522,6 +525,9 @@ fn configure_cmake(
     }
     if builder.config.llvm_clang_cl.is_some() {
         cxxflags.push_str(&format!(" --target={}", target))
+    }
+    if builder.config.llvm_profile_generate {
+        cxxflags.push_str(" -Xclang -mllvm -Xclang -vp-counters-per-site=4")
     }
     cfg.define("CMAKE_CXX_FLAGS", cxxflags);
     if let Some(ar) = builder.ar(target) {
