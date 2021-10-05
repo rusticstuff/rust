@@ -46,12 +46,6 @@ cd /checkout/obj
 ./build/$PGO_HOST/llvm/bin/llvm-profdata \
     merge -o /tmp/rustc-pgo.profdata /tmp/rustc-pgo
 
-# Merge the profile data we gathered for LLVM
-# Note that this uses the profdata from the clang we used to build LLVM,
-# which likely has a different version than our in-tree clang.
-/rustroot/bin/llvm-profdata \
-    merge -o /tmp/llvm-pgo.profdata ./build/$PGO_HOST/llvm/build/profiles
-
 # Rustbuild currently doesn't support rebuilding LLVM when PGO options
 # change (or any other llvm-related options); so just clear out the relevant
 # directories ourselves.
@@ -60,4 +54,4 @@ rm -r ./build/$PGO_HOST/llvm ./build/$PGO_HOST/lld
 # This produces the actual final set of artifacts.
 $@ \
     --rust-profile-use=/tmp/rustc-pgo.profdata \
-    --llvm-profile-use=/tmp/llvm-pgo.profdata
+    --llvm-profile-use=/tmp/rustc-pgo.profdata

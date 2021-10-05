@@ -197,6 +197,10 @@ impl Step for Llvm {
         if builder.config.llvm_profile_generate {
             cfg.define("LLVM_BUILD_INSTRUMENTED", "IR");
             cfg.define("LLVM_BUILD_RUNTIME", "No");
+            cfg.define(
+                "LLVM_PROFILE_DATA_DIR",
+                builder.config.rust_profile_generate.as_ref().unwrap(),
+            );
         }
         if let Some(path) = builder.config.llvm_profile_use.as_ref() {
             cfg.define("LLVM_PROFDATA_FILE", &path);
@@ -510,7 +514,7 @@ fn configure_cmake(
         }
     }
     if builder.config.llvm_profile_generate {
-        cflags.push_str(" -Xclang -mllvm -Xclang -vp-counters-per-site=4")
+        cflags.push_str(" -Xclang -mllvm -Xclang -disable-vp")
     }
     if builder.config.llvm_clang_cl.is_some() {
         cflags.push_str(&format!(" --target={}", target))
@@ -528,7 +532,7 @@ fn configure_cmake(
         cxxflags.push_str(&format!(" --target={}", target))
     }
     if builder.config.llvm_profile_generate {
-        cxxflags.push_str(" -Xclang -mllvm -Xclang -vp-counters-per-site=4")
+        cxxflags.push_str(" -Xclang -mllvm -Xclang -disable-vp")
     }
     cfg.define("CMAKE_CXX_FLAGS", cxxflags);
     if let Some(ar) = builder.ar(target) {
@@ -607,6 +611,10 @@ impl Step for Lld {
         if builder.config.llvm_profile_generate {
             cfg.define("LLVM_BUILD_INSTRUMENTED", "IR");
             cfg.define("LLVM_BUILD_RUNTIME", "No");
+            cfg.define(
+                "LLVM_PROFILE_DATA_DIR",
+                builder.config.rust_profile_generate.as_ref().unwrap(),
+            );
         }
         if let Some(path) = builder.config.llvm_profile_use.as_ref() {
             cfg.define("LLVM_PROFDATA_FILE", &path);

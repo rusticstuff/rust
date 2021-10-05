@@ -595,7 +595,7 @@ impl Step for Rustc {
 
         let is_collecting = if let Some(path) = &builder.config.rust_profile_generate {
             if compiler.stage == 1 {
-                cargo.rustflag(&format!("-Cprofile-generate={}", path));
+                cargo.rustflag(&format!("-Cprofile-generate={}", path).as_str());
                 // Apparently necessary to avoid overflowing the counters during
                 // a Cargo build profile
                 cargo.rustflag("-Cllvm-args=-vp-counters-per-site=4");
@@ -628,9 +628,6 @@ impl Step for Rustc {
         ));
 
         cargo.rustflag("-Clinker-plugin-lto");
-        if builder.config.llvm_profile_generate {
-            cargo.rustflag("-Clink-args=-fprofile-instr-generate");
-        }
         cargo.rustflag("-Clink-args=-fuse-ld=lld");
         run_cargo(
             builder,
