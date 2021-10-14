@@ -197,7 +197,7 @@ impl Step for Rustc {
             target,
             cargo_subcommand(builder.kind),
         );
-        rustc_cargo(builder, &mut cargo, target);
+        rustc_cargo(builder, &mut cargo, target, false);
 
         // For ./x.py clippy, don't run with --all-targets because
         // linting tests and benchmarks can produce very noisy results

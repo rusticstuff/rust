@@ -585,7 +585,7 @@ impl Step for Rustc {
         });
 
         let mut cargo = builder.cargo(compiler, Mode::Rustc, SourceType::InTree, target, "build");
-        rustc_cargo(builder, &mut cargo, target);
+        rustc_cargo(builder, &mut cargo, target, self.compiler.stage >= 1);
 
         if builder.config.rust_profile_use.is_some()
             && builder.config.rust_profile_generate.is_some()
@@ -643,12 +643,21 @@ impl Step for Rustc {
     }
 }
 
-pub fn rustc_cargo(builder: &Builder<'_>, cargo: &mut Cargo, target: TargetSelection) {
+pub fn rustc_cargo(
+    builder: &Builder<'_>,
+    cargo: &mut Cargo,
+    target: TargetSelection,
+    use_lto: bool,
+) {
     cargo
         .arg("--features")
         .arg(builder.rustc_features())
         .arg("--manifest-path")
         .arg(builder.src.join("compiler/rustc/Cargo.toml"));
+    if use_lto {
+        cargo.rustflag("-Cprefer-dynamic=no");
+        cargo.env("CARGO_PROFILE_RELEASE_LTO", "thin");
+    }
     rustc_cargo_env(builder, cargo, target);
 }
 

@@ -595,7 +595,7 @@ impl Step for Rustc {
         cargo.rustdocflag("-Znormalize-docs");
         cargo.rustdocflag("--show-type-layout");
         cargo.rustdocflag("--generate-link-to-definition");
-        compile::rustc_cargo(builder, &mut cargo, target);
+        compile::rustc_cargo(builder, &mut cargo, target, false);
         cargo.arg("-Zunstable-options");
         cargo.arg("-Zskip-rustdoc-fingerprint");
 
