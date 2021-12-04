@@ -1520,41 +1520,40 @@ impl<T, A: Allocator> Vec<T, A> {
 
         let mut g = BackshiftOnDrop { v: self, processed_len: 0, deleted_cnt: 0, original_len };
 
-        // delete_one returns a bool indicating whether the processed element was deleted.
+        // check_one returns the current element if it was retained.
         #[inline(always)]
-        fn delete_one<F, T, A: Allocator>(
-            cur: &mut T,
+        fn check_one<F, T, A: Allocator>(
             f: &mut F,
             g: &mut BackshiftOnDrop<'_, T, A>,
-        ) -> bool
+        ) -> Option<*const T>
         where
             F: FnMut(&mut T) -> bool,
         {
-            let delete = !f(cur);
-            // Advance early to avoid double drop if `drop_in_place` panicks.
+            // SAFETY: Unchecked element must be valid.
+            let cur = unsafe { &mut *g.v.as_mut_ptr().add(g.processed_len) };
+            let retain = f(cur);
+            // Advance early to avoid double drop if `drop_in_place` panics.
             g.processed_len += 1;
-            if delete {
+            if retain {
+                Some(cur)
+            } else {
                 g.deleted_cnt += 1;
                 // SAFETY: We never touch this element again after dropped.
                 unsafe { ptr::drop_in_place(cur) };
+                None
             }
-            delete
         }
 
         // Stage 1: Nothing was deleted.
         while g.processed_len != original_len {
-            // SAFETY: Unchecked element must be valid.
-            let cur = unsafe { &mut *g.v.as_mut_ptr().add(g.processed_len) };
-            if delete_one(cur, &mut f, &mut g) {
+            if check_one(&mut f, &mut g).is_none() {
                 break;
             }
         }
 
         // Stage 2: Some elements were deleted.
         while g.processed_len != original_len {
-            // SAFETY: Unchecked element must be valid.
-            let cur = unsafe { &mut *g.v.as_mut_ptr().add(g.processed_len) };
-            if !delete_one(cur, &mut f, &mut g) {
+            if let Some(cur) = check_one(&mut f, &mut g) {
                 // SAFETY: `deleted_cnt` > 0, so the hole slot must not overlap with current element.
                 // We use copy for move, and never touch this element again.
                 unsafe {
