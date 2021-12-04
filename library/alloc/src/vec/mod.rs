@@ -1520,48 +1520,48 @@ impl<T, A: Allocator> Vec<T, A> {
 
         let mut g = BackshiftOnDrop { v: self, processed_len: 0, deleted_cnt: 0, original_len };
 
-        // process_one return a bool indicates whether the processing element should be retained.
+        // delete_one returns a bool indicating whether the processed element was deleted.
         #[inline(always)]
-        fn process_one<F, T, A: Allocator, const DELETED: bool>(
+        fn delete_one<F, T, A: Allocator>(
+            cur: &mut T,
             f: &mut F,
             g: &mut BackshiftOnDrop<'_, T, A>,
         ) -> bool
         where
             F: FnMut(&mut T) -> bool,
         {
-            // SAFETY: Unchecked element must be valid.
-            let cur = unsafe { &mut *g.v.as_mut_ptr().add(g.processed_len) };
-            if !f(cur) {
-                // Advance early to avoid double drop if `drop_in_place` panicked.
-                g.processed_len += 1;
+            let delete = !f(cur);
+            // Advance early to avoid double drop if `drop_in_place` panicks.
+            g.processed_len += 1;
+            if delete {
                 g.deleted_cnt += 1;
                 // SAFETY: We never touch this element again after dropped.
                 unsafe { ptr::drop_in_place(cur) };
-                // We already advanced the counter.
-                return false;
             }
-            if DELETED {
-                // SAFETY: `deleted_cnt` > 0, so the hole slot must not overlap with current element.
-                // We use copy for move, and never touch this element again.
-                unsafe {
-                    let hole_slot = g.v.as_mut_ptr().add(g.processed_len - g.deleted_cnt);
-                    ptr::copy_nonoverlapping(cur, hole_slot, 1);
-                }
-            }
-            g.processed_len += 1;
-            return true;
+            delete
         }
 
         // Stage 1: Nothing was deleted.
         while g.processed_len != original_len {
-            if !process_one::<F, T, A, false>(&mut f, &mut g) {
+            // SAFETY: Unchecked element must be valid.
+            let cur = unsafe { &mut *g.v.as_mut_ptr().add(g.processed_len) };
+            if delete_one(cur, &mut f, &mut g) {
                 break;
             }
         }
 
         // Stage 2: Some elements were deleted.
         while g.processed_len != original_len {
-            process_one::<F, T, A, true>(&mut f, &mut g);
+            // SAFETY: Unchecked element must be valid.
+            let cur = unsafe { &mut *g.v.as_mut_ptr().add(g.processed_len) };
+            if !delete_one(cur, &mut f, &mut g) {
+                // SAFETY: `deleted_cnt` > 0, so the hole slot must not overlap with current element.
+                // We use copy for move, and never touch this element again.
+                unsafe {
+                    let hole_slot = g.v.as_mut_ptr().add(g.processed_len - 1 - g.deleted_cnt);
+                    ptr::copy_nonoverlapping(cur, hole_slot, 1);
+                }
+            }
         }
 
         // All item are processed. This can be optimized to `set_len` by LLVM.
