@@ -743,7 +743,52 @@ fn bench_retain_100000(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_retain_first_half_100000(b: &mut Bencher) {
+    let v = (1..=100000).collect::<Vec<u32>>();
+    b.iter(|| {
+        let mut v = v.clone();
+        v.retain(|x| *x < 50000)
+    });
+}
+
+#[bench]
+fn bench_retain_second_half_100000(b: &mut Bencher) {
+    let v = (1..=100000).collect::<Vec<u32>>();
+    b.iter(|| {
+        let mut v = v.clone();
+        v.retain(|x| *x >= 50000)
+    });
+}
+
+#[bench]
+fn bench_retain_all_but_first_100000(b: &mut Bencher) {
+    let v = (1..=100000).collect::<Vec<u32>>();
+    b.iter(|| {
+        let mut v = v.clone();
+        v.retain(|x| *x != 1)
+    });
+}
+
+#[bench]
+fn bench_retain_all_but_last_100000(b: &mut Bencher) {
+    let v = (1..=100000).collect::<Vec<u32>>();
+    b.iter(|| {
+        let mut v = v.clone();
+        v.retain(|x| *x != 10000)
+    });
+}
+
+#[bench]
 fn bench_retain_whole_100000(b: &mut Bencher) {
     let mut v = black_box(vec![826u32; 100000]);
     b.iter(|| v.retain(|x| *x == 826u32));
+}
+
+#[bench]
+fn bench_retain_none_100000(b: &mut Bencher) {
+    let v = (1..=100000).collect::<Vec<u32>>();
+    b.iter(|| {
+        let mut v = v.clone();
+        v.retain(|x| *x != 10001)
+    });
 }
