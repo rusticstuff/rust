@@ -451,6 +451,24 @@ impl FromInner<u32> for FilePermissions {
     }
 }
 
+impl ReadDir {
+    fn new(dirp: Dir, root: PathBuf) -> Self {
+        let inner = InnerReadDir { dirp, root };
+        ReadDir {
+            inner: Arc::new(inner),
+            #[cfg(not(any(
+                target_os = "android",
+                target_os = "linux",
+                target_os = "solaris",
+                target_os = "illumos",
+                target_os = "fuchsia",
+                target_os = "redox",
+            )))]
+            end_of_stream: false,
+        }
+    }
+}
+
 impl fmt::Debug for ReadDir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // This will only be called from std::fs::ReadDir, which will add a "ReadDir()" frame.
@@ -1098,19 +1116,7 @@ pub fn readdir(p: &Path) -> io::Result<ReadDir> {
         if ptr.is_null() {
             Err(Error::last_os_error())
         } else {
-            let inner = InnerReadDir { dirp: Dir(ptr), root };
-            Ok(ReadDir {
-                inner: Arc::new(inner),
-                #[cfg(not(any(
-                    target_os = "android",
-                    target_os = "linux",
-                    target_os = "solaris",
-                    target_os = "illumos",
-                    target_os = "fuchsia",
-                    target_os = "redox",
-                )))]
-                end_of_stream: false,
-            })
+            Ok(ReadDir::new(Dir(ptr), root))
         }
     }
 }
@@ -1485,13 +1491,12 @@ mod remove_dir_impl {
 // Modern implementation using openat(), unlinkat() and fdopendir()
 #[cfg(not(any(target_os = "redox", target_os = "espidf")))]
 mod remove_dir_impl {
-    use super::{cstr, lstat, Dir, DirEntry, InnerReadDir, ReadDir};
-    use crate::ffi::CStr;
+    use super::{cstr, lstat, Dir, DirEntry, ReadDir};
+    use crate::ffi::{CStr, CString};
     use crate::io;
     use crate::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
-    use crate::os::unix::prelude::{OwnedFd, RawFd};
+    use crate::os::unix::prelude::{BorrowedFd, OwnedFd};
     use crate::path::{Path, PathBuf};
-    use crate::sync::Arc;
     use crate::sys::{cvt, cvt_r};
 
     #[cfg(not(all(target_os = "macos", target_arch = "x86_64"),))]
@@ -1537,43 +1542,19 @@ mod remove_dir_impl {
         }
     }
 
-    pub fn openat_nofollow_dironly(parent_fd: Option<RawFd>, p: &CStr) -> io::Result<OwnedFd> {
+    pub fn openat_nofollow_dironly(
+        parent_fd: Option<BorrowedFd<'_>>,
+        p: &CStr,
+    ) -> io::Result<OwnedFd> {
         let fd = cvt_r(|| unsafe {
             openat(
-                parent_fd.unwrap_or(libc::AT_FDCWD),
+                parent_fd.map(|fd| fd.as_raw_fd()).unwrap_or(libc::AT_FDCWD),
                 p.as_ptr(),
                 libc::O_CLOEXEC | libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_DIRECTORY,
             )
         })?;
+        // SAFETY: file descriptor was opened in this fn
         Ok(unsafe { OwnedFd::from_raw_fd(fd) })
-    }
-
-    fn fdreaddir(dir_fd: OwnedFd) -> io::Result<(ReadDir, RawFd)> {
-        let ptr = unsafe { fdopendir(dir_fd.as_raw_fd()) };
-        if ptr.is_null() {
-            return Err(io::Error::last_os_error());
-        }
-        let dirp = Dir(ptr);
-        // file descriptor is automatically closed by libc::closedir() now, so give up ownership
-        let new_parent_fd = dir_fd.into_raw_fd();
-        // a valid root is not needed because we do not call any functions involving the full path
-        // of the DirEntrys.
-        let dummy_root = PathBuf::new();
-        Ok((
-            ReadDir {
-                inner: Arc::new(InnerReadDir { dirp, root: dummy_root }),
-                #[cfg(not(any(
-                    target_os = "android",
-                    target_os = "linux",
-                    target_os = "solaris",
-                    target_os = "illumos",
-                    target_os = "fuchsia",
-                    target_os = "redox",
-                )))]
-                end_of_stream: false,
-            },
-            new_parent_fd,
-        ))
     }
 
     #[cfg(any(
@@ -1600,62 +1581,102 @@ mod remove_dir_impl {
         }
     }
 
-    fn remove_dir_all_recursive(parent_fd: Option<RawFd>, p: &Path) -> io::Result<()> {
-        let pcstr = cstr(p)?;
-
-        // try opening as directory
-        let fd = match openat_nofollow_dironly(parent_fd, &pcstr) {
-            Err(err) if err.raw_os_error() == Some(libc::ENOTDIR) => {
-                // not a directory - don't traverse further
-                return match parent_fd {
-                    // unlink...
-                    Some(parent_fd) => {
-                        cvt(unsafe { unlinkat(parent_fd, pcstr.as_ptr(), 0) }).map(drop)
-                    }
-                    // ...unless this was supposed to be the deletion root directory
-                    None => Err(err),
-                };
-            }
-            result => result?,
-        };
-
-        // open the directory passing ownership of the fd
-        let (dir, fd) = fdreaddir(fd)?;
-        for child in dir {
-            let child = child?;
-            match is_dir(&child) {
-                Some(true) => {
-                    remove_dir_all_recursive(Some(fd), Path::new(&child.file_name()))?;
-                }
-                Some(false) => {
-                    cvt(unsafe { unlinkat(fd, child.name_cstr().as_ptr(), 0) })?;
-                }
-                None => {
-                    // POSIX specifies that calling unlink()/unlinkat(..., 0) on a directory can succeed
-                    // if the process has the appropriate privileges. This however can causing orphaned
-                    // directories requiring an fsck e.g. on Solaris and Illumos. So we try recursing
-                    // into it first instead of trying to unlink() it.
-                    remove_dir_all_recursive(Some(fd), Path::new(&child.file_name()))?;
-                }
-            }
-        }
-
-        // unlink the directory after removing its contents
-        cvt(unsafe {
-            unlinkat(parent_fd.unwrap_or(libc::AT_FDCWD), pcstr.as_ptr(), libc::AT_REMOVEDIR)
-        })?;
-        Ok(())
+    struct OpenDir<'a> {
+        readdir: ReadDir,
+        fd: BorrowedFd<'a>,
+        name: CString,
     }
 
-    fn remove_dir_all_modern(p: &Path) -> io::Result<()> {
-        // We cannot just call remove_dir_all_recursive() here because that would not delete a passed
-        // symlink. No need to worry about races, because remove_dir_all_recursive() does not recurse
-        // into symlinks.
+    impl OpenDir<'_> {
+        // Opens the entry as a directory and returns Ok(Some(Opendir)), if parent_fd + name denotes a directory.
+        // Otherwise tries to unlink and returns Ok(None) if successful. The path supposed to specify the
+        // root deletion directory is not unlinked.
+        fn open_or_unlink(
+            parent_fd: Option<BorrowedFd<'_>>,
+            name: CString,
+        ) -> io::Result<Option<Self>> {
+            // try to open as a directory
+            let fd = match openat_nofollow_dironly(parent_fd, &name) {
+                Ok(fd) => fd,
+                Err(err) if err.raw_os_error() == Some(libc::ENOTDIR) => {
+                    // not a directory - unlink and return
+                    return match parent_fd {
+                        // unlink...
+                        Some(parent_fd) => {
+                            cvt(unsafe { unlinkat(parent_fd.as_raw_fd(), name.as_ptr(), 0) })?;
+                            Ok(None)
+                        }
+                        // ...unless this was supposed to be the deletion root directory
+                        None => Err(err),
+                    };
+                }
+                Err(err) => return Err(err),
+            };
+
+            // open the directory passing ownership of the fd
+            let ptr = unsafe { fdopendir(fd.as_raw_fd()) };
+            if ptr.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            let dirp = Dir(ptr);
+            // file descriptor is automatically closed by Dir::drop() now, so give up ownership
+            let fd = fd.into_raw_fd();
+            // a valid root is not needed because we do not call any functions involving the full path
+            // of the DirEntrys.
+            let dummy_root = PathBuf::new();
+            let readdir = ReadDir::new(dirp, dummy_root);
+            // SAFETY: fd lifetime is tied to dirp
+            let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+            Ok(Some(Self { readdir, fd, name }))
+        }
+    }
+
+    fn remove_dir_all_loop(p: &Path) -> io::Result<()> {
+        let mut ancestors = Vec::<OpenDir<'_>>::new();
+        let mut current = OpenDir::open_or_unlink(None, cstr(p)?)?.unwrap();
+        loop {
+            while let Some(child) = current.readdir.next() {
+                let child = child?;
+                if let Some(false) = is_dir(&child) {
+                    // just unlink files
+                    cvt(unsafe {
+                        unlinkat(current.fd.as_raw_fd(), child.name_cstr().as_ptr(), 0)
+                    })?;
+                } else {
+                    // try to open the entry as directory, unlink it if it is not
+                    if let Some(child) =
+                        OpenDir::open_or_unlink(Some(current.fd), child.name_cstr().into())?
+                    {
+                        // recurse into the newly opened directory
+                        let parent = current;
+                        current = child;
+                        ancestors.push(parent);
+                    }
+                }
+            }
+
+            // unlink the directory after removing its contents
+            let parent_fd =
+                ancestors.last().map(|open_dir| open_dir.fd.as_raw_fd()).unwrap_or(libc::AT_FDCWD);
+            cvt(unsafe { unlinkat(parent_fd, current.name.as_ptr(), libc::AT_REMOVEDIR) })?;
+
+            // go up to the parent directory if we are not done
+            match ancestors.pop() {
+                Some(parent) => current = parent,
+                None => return Ok(()),
+            }
+        }
+    }
+
+    pub fn remove_dir_all_modern(p: &Path) -> io::Result<()> {
+        // We cannot just call remove_dir_all_loop() here because that would not delete a passed
+        // symlink. remove_dir_all_loop() does not descend into symlinks and does not delete p
+        // if it is a file.
         let attr = lstat(p)?;
         if attr.file_type().is_symlink() {
             crate::fs::remove_file(p)
         } else {
-            remove_dir_all_recursive(None, p)
+            remove_dir_all_loop(p)
         }
     }
 
