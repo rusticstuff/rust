@@ -860,6 +860,13 @@ where
         // Safety: The caller is responsible for upholding all invariants
         unsafe { core::intrinsics::simd::simd_scatter(self, dest, enable.to_int()) }
     }
+
+    #[inline]
+    pub(crate) unsafe fn get_unchecked(self, i: u32) -> T {
+        // Safety: The caller must ensure that the lane index is in bounds.
+        unsafe { core::intrinsics::simd::simd_extract(self, i) }
+        // todo!()
+    }
 }
 
 impl<T, const N: usize> Copy for Simd<T, N>
