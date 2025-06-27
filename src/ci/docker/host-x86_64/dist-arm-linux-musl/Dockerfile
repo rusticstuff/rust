@@ -33,5 +33,6 @@ ENV RUST_CONFIGURE_ARGS \
       --musl-root-aarch64=/usr/local/aarch64-linux-musl \
       --enable-sanitizers \
       --enable-profiler \
-      --set target.aarch64-unknown-linux-musl.crt-static=false
+      --set target.aarch64-unknown-linux-musl.crt-static=false \
+      --set rust.jemalloc
 ENV SCRIPT python3 ../x.py dist --host $HOSTS --target $HOSTS
